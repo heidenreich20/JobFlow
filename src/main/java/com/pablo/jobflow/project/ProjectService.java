@@ -4,13 +4,17 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+import com.pablo.jobflow.task.TaskRepository;
+
 @Service
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final TaskRepository taskRepository;
 
-    public ProjectService(ProjectRepository projectRepository) {
+    public ProjectService(ProjectRepository projectRepository, TaskRepository taskRepository) {
         this.projectRepository = projectRepository;
+        this.taskRepository = taskRepository;
     }
 
     public Project createProject(ProjectRequest request) {
@@ -39,10 +43,21 @@ public class ProjectService {
         return projectRepository.save(existingProject);
     }
 
-    public void deleteProject(Long id) {
+    public void deleteProject(Long id, boolean force) {
         if (!projectRepository.existsById(id)) {
             throw new ProjectNotFoundException(id);
         }
+    
+        boolean hasTasks = taskRepository.existsByProjectId(id);
+    
+        if (hasTasks && !force) {
+            throw new ProjectHasTasksException(id);
+        }
+    
+        if (force) {
+            taskRepository.deleteByProjectId(id);
+        }
+    
         projectRepository.deleteById(id);
     }
 }

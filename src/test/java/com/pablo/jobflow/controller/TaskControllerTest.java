@@ -27,9 +27,13 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.pablo.jobflow.auth.JwtService;
+import com.pablo.jobflow.config.SecurityConfig;
 import com.pablo.jobflow.config.SpringDataConfig;
 import com.pablo.jobflow.project.ProjectNotFoundException;
 import com.pablo.jobflow.task.InvalidTaskStatusTransitionException;
@@ -42,7 +46,8 @@ import com.pablo.jobflow.task.TaskStatus;
 import com.pablo.jobflow.task.TaskStatusRequest;
 
 @WebMvcTest(TaskController.class)
-@Import(SpringDataConfig.class)
+@Import({ SpringDataConfig.class, SecurityConfig.class })
+@WithMockUser
 class TaskControllerTest {
 
     // --- API Endpoints ---
@@ -77,6 +82,12 @@ class TaskControllerTest {
     @MockitoBean
     private TaskService taskService;
 
+    @MockitoBean
+    private JwtService jwtService;
+
+    @MockitoBean
+    private UserDetailsService userDetailsService;
+
     // ---------------------------------------------------------
     // CREATE
     // ---------------------------------------------------------
@@ -91,7 +102,7 @@ class TaskControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(TASK_JSON))
                 .andExpect(status().isCreated())
-                .andExpect(header().string("Location", "/api/tasks/1"))
+                .andExpect(header().string("Location", "http://localhost/api/tasks/1"))
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.title").value("Test Task"))
                 .andExpect(jsonPath("$.description").value("A task for testing"))
