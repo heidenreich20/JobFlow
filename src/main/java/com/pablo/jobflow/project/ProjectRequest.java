@@ -10,6 +10,8 @@ public record ProjectRequest(
         String name,
 
         @Size(max = 2000, message = "Description must be at most 2000 characters")
-        String description
+        String description,
+
+        Long organizationId
 
 ) {}
