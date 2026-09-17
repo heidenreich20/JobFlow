@@ -5,17 +5,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.pablo.jobflow.project.Project;
 import com.pablo.jobflow.project.ProjectNotFoundException;
 import com.pablo.jobflow.project.ProjectRepository;
+import com.pablo.jobflow.user.User;
+import com.pablo.jobflow.user.UserRepository;
 
 @SpringBootTest
 @Transactional
@@ -30,11 +37,45 @@ class TaskServiceIntegrationTest {
     @Autowired
     private ProjectRepository projectRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    private User actingUser;
+
+    // TaskService now enforces authorization inherited from the project (8.8), so every
+    // test needs a real authenticated user, and every project it creates needs an owner
+    // that user actually is - otherwise these calls would be denied before reaching the
+    // behavior each test is meant to exercise.
+    @BeforeEach
+    void setUp() {
+        User user = new User();
+        user.setEmail("task-integration@acme.com");
+        user.setPassword("irrelevant-for-this-test");
+
+        actingUser = userRepository.saveAndFlush(user);
+
+        Authentication authentication =
+                new UsernamePasswordAuthenticationToken(actingUser.getEmail(), null);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private Project newOwnedProject(String name, String description) {
+        Project project = new Project();
+        project.setName(name);
+        project.setDescription(description);
+        project.setOwner(actingUser);
+        return project;
+    }
+
     @Test
     void createTask_persistsTaskAndAssociatesItWithProject() {
-        Project project = new Project();
-        project.setName("Service Integration Project");
-        project.setDescription("Testing TaskService with PostgreSQL");
+        Project project = newOwnedProject(
+                "Service Integration Project", "Testing TaskService with PostgreSQL");
 
         Project savedProject = projectRepository.saveAndFlush(project);
 
@@ -79,13 +120,8 @@ class TaskServiceIntegrationTest {
 
     @Test
     void getTasksForProject_returnsTasksForProject() {
-        Project project = new Project();
-        project.setName("Task Lookup Project");
-        project.setDescription("Testing service task lookup");
-
-        Project otherProject = new Project();
-        otherProject.setName("Other Project");
-        otherProject.setDescription("Should not be returned");
+        Project project = newOwnedProject("Task Lookup Project", "Testing service task lookup");
+        Project otherProject = newOwnedProject("Other Project", "Should not be returned");
 
         Project savedProject = projectRepository.saveAndFlush(project);
         Project savedOtherProject = projectRepository.saveAndFlush(otherProject);

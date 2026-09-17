@@ -154,11 +154,29 @@ public class ProjectService {
         return role == OrganizationRole.OWNER || role == OrganizationRole.ADMIN;
     }
 
-    private boolean canView(User user, Project project) {
+    public boolean canView(User user, Project project) {
         if (project.getOwner() != null) {
             return isOwner(user, project);
         }
         return roleOf(user, project.getOrganization()) != null;
+    }
+
+    /** Can edit name/description: owner (personal) or any member except VIEWER (organization). */
+    public boolean canEdit(User user, Project project) {
+        if (project.getOwner() != null) {
+            return isOwner(user, project);
+        }
+        OrganizationRole role = roleOf(user, project.getOrganization());
+        return role != null && role != OrganizationRole.VIEWER;
+    }
+
+    /** Can reassign or delete: owner (personal) or OWNER/ADMIN (organization). */
+    public boolean canManage(User user, Project project) {
+        if (project.getOwner() != null) {
+            return isOwner(user, project);
+        }
+        OrganizationRole role = roleOf(user, project.getOrganization());
+        return role != null && isOwnerOrAdmin(role);
     }
 
     private void requireCanView(User user, Project project, Long projectId) {
@@ -167,39 +185,23 @@ public class ProjectService {
         }
     }
 
-    /** Can edit name/description: owner (personal) or any member except VIEWER (organization). */
+    /** Wraps canEdit with the visibility-then-permission exception ordering ProjectService uses. */
     private void requireCanEditFields(User user, Project project, Long projectId) {
-        if (project.getOwner() != null) {
-            if (!isOwner(user, project)) {
-                throw new ProjectNotFoundException(projectId);
-            }
-            return;
-        }
-
-        OrganizationRole role = roleOf(user, project.getOrganization());
-        if (role == null) {
+        if (!canView(user, project)) {
             throw new ProjectNotFoundException(projectId);
         }
-        if (role == OrganizationRole.VIEWER) {
+        if (!canEdit(user, project)) {
             throw new InsufficientOrganizationPermissionException(
                     "VIEWER cannot edit projects.");
         }
     }
 
-    /** Can reassign or delete: owner (personal) or OWNER/ADMIN (organization). */
+    /** Wraps canManage with the visibility-then-permission exception ordering ProjectService uses. */
     private void requireCanManage(User user, Project project, Long projectId) {
-        if (project.getOwner() != null) {
-            if (!isOwner(user, project)) {
-                throw new ProjectNotFoundException(projectId);
-            }
-            return;
-        }
-
-        OrganizationRole role = roleOf(user, project.getOrganization());
-        if (role == null) {
+        if (!canView(user, project)) {
             throw new ProjectNotFoundException(projectId);
         }
-        if (!isOwnerOrAdmin(role)) {
+        if (!canManage(user, project)) {
             throw new InsufficientOrganizationPermissionException(
                     "Only an OWNER or ADMIN can perform this action.");
         }

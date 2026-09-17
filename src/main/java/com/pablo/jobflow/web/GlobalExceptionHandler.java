@@ -19,6 +19,8 @@ import com.pablo.jobflow.auth.InvalidCredentialsException;
 import com.pablo.jobflow.organization.DuplicateMembershipException;
 import com.pablo.jobflow.organization.DuplicateOrganizationNameException;
 import com.pablo.jobflow.organization.InsufficientOrganizationPermissionException;
+import com.pablo.jobflow.organization.LastOwnerException;
+import com.pablo.jobflow.organization.MembershipNotFoundException;
 import com.pablo.jobflow.organization.OrganizationNotFoundException;
 import com.pablo.jobflow.project.ProjectHasTasksException;
 import com.pablo.jobflow.project.ProjectNotFoundException;
@@ -31,13 +33,14 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    // 1. Grouped identical exception handlers
-    @ExceptionHandler({ ProjectNotFoundException.class, TaskNotFoundException.class, UserNotFoundException.class })
+    @ExceptionHandler({ ProjectNotFoundException.class, TaskNotFoundException.class, UserNotFoundException.class,
+            MembershipNotFoundException.class })
     public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex) {
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), null);
     }
 
-    @ExceptionHandler({ ProjectHasTasksException.class, EmailAlreadyInUseException.class, DuplicateMembershipException.class })
+    @ExceptionHandler({ ProjectHasTasksException.class, EmailAlreadyInUseException.class,
+            DuplicateMembershipException.class, LastOwnerException.class })
     public ResponseEntity<ErrorResponse> handleConflict(RuntimeException ex) {
         return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage(), null);
     }
@@ -58,7 +61,6 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), null);
     }
 
-    // 2. Streamlined validation error mapping
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> fieldErrors = ex.getBindingResult()
@@ -67,13 +69,12 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.toMap(
                         FieldError::getField,
                         FieldError::getDefaultMessage,
-                        (existing, replacement) -> existing // Prevents crashes if a field has multiple errors
+                        (existing, replacement) -> existing
                 ));
 
         return buildErrorResponse(HttpStatus.BAD_REQUEST, "Validation failed", fieldErrors);
     }
 
-    // 3. Added a generic fallback for unexpected production errors
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
         log.error("Unhandled exception occurred", ex);
@@ -83,7 +84,6 @@ public class GlobalExceptionHandler {
                 null);
     }
 
-    // 4. Fixed excessive indentation
     private ResponseEntity<ErrorResponse> buildErrorResponse(
             HttpStatus status,
             String message,
