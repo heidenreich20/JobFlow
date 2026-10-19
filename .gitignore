@@ -1,5 +1,11 @@
 HELP.md
 target/
+
+# Local secrets — never commit real JWT or DB credentials
+.env
+application-local.properties
+src/main/resources/application-local.properties
+
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
