@@ -1,5 +1,6 @@
 package com.pablo.jobflow.project;
 
+import com.pablo.jobflow.auth.CurrentUserProvider;
 import com.pablo.jobflow.organization.InsufficientOrganizationPermissionException;
 import com.pablo.jobflow.organization.Organization;
 import com.pablo.jobflow.organization.OrganizationMembership;
@@ -9,9 +10,7 @@ import com.pablo.jobflow.organization.OrganizationRepository;
 import com.pablo.jobflow.organization.OrganizationRole;
 import com.pablo.jobflow.task.TaskRepository;
 import com.pablo.jobflow.user.User;
-import com.pablo.jobflow.user.UserRepository;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,10 +18,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.Optional;
@@ -47,7 +42,7 @@ class ProjectServiceTest {
     private OrganizationMembershipRepository membershipRepository;
 
     @Mock
-    private UserRepository userRepository;
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private ProjectService projectService;
@@ -64,15 +59,8 @@ class ProjectServiceTest {
         organization.setId(1L);
     }
 
-    @AfterEach
-    void clearSecurityContext() {
-        SecurityContextHolder.clearContext();
-    }
-
     private void authenticateAsActor() {
-        Authentication authentication =
-                new UsernamePasswordAuthenticationToken("actor@acme.com", null);
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        lenient().when(currentUserProvider.requireCurrentUser()).thenReturn(actingUser);
     }
 
     private void givenRole(User user, Organization org, OrganizationRole role) {
@@ -91,7 +79,6 @@ class ProjectServiceTest {
     void createProject_NoOrganization_CreatesPersonalProjectOwnedByActingUser() {
         ProjectRequest request = new ProjectRequest("Personal Project", "desc", null);
 
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
 
         authenticateAsActor();
@@ -106,7 +93,6 @@ class ProjectServiceTest {
     void createProject_WithOrganization_ActorIsMember_Succeeds() {
         ProjectRequest request = new ProjectRequest("Org Project", "desc", 1L);
 
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization));
         givenRole(actingUser, organization, OrganizationRole.MEMBER);
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -123,7 +109,6 @@ class ProjectServiceTest {
     void createProject_WithOrganization_ActorIsViewer_ThrowsException() {
         ProjectRequest request = new ProjectRequest("Org Project", "desc", 1L);
 
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization));
         givenRole(actingUser, organization, OrganizationRole.VIEWER);
 
@@ -139,7 +124,6 @@ class ProjectServiceTest {
     void createProject_WithOrganization_ActorNotMember_ThrowsException() {
         ProjectRequest request = new ProjectRequest("Org Project", "desc", 1L);
 
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization));
         givenNotMember(actingUser, organization);
 
@@ -155,7 +139,6 @@ class ProjectServiceTest {
     void createProject_WithOrganization_OrganizationMissing_ThrowsException() {
         ProjectRequest request = new ProjectRequest("Org Project", "desc", 99L);
 
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         when(organizationRepository.findById(99L)).thenReturn(Optional.empty());
 
         authenticateAsActor();
@@ -175,7 +158,6 @@ class ProjectServiceTest {
         existingProject.setName("My Project");
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
 
         authenticateAsActor();
 
@@ -193,7 +175,6 @@ class ProjectServiceTest {
         existingProject.setOwner(realOwner);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
 
         authenticateAsActor();
 
@@ -208,7 +189,6 @@ class ProjectServiceTest {
         existingProject.setName("Org Project");
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenRole(actingUser, organization, OrganizationRole.VIEWER);
 
         authenticateAsActor();
@@ -224,7 +204,6 @@ class ProjectServiceTest {
         existingProject.setOrganization(organization);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenNotMember(actingUser, organization);
 
         authenticateAsActor();
@@ -266,7 +245,6 @@ class ProjectServiceTest {
         when(projectRepository.findAll()).thenReturn(List.of(
                 myPersonalProject, othersPersonalProject, myOrgProject, otherOrgProject));
 
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenRole(actingUser, organization, OrganizationRole.MEMBER);
         givenNotMember(actingUser, otherOrg);
 
@@ -289,7 +267,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Updated Name", "Updated desc", null);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
 
         authenticateAsActor();
@@ -312,7 +289,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Updated Name", "desc", null);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
 
         authenticateAsActor();
 
@@ -330,7 +306,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Updated Name", "desc", 1L);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenRole(actingUser, organization, OrganizationRole.MEMBER);
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -350,7 +325,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Updated Name", "desc", 1L);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenRole(actingUser, organization, OrganizationRole.VIEWER);
 
         authenticateAsActor();
@@ -369,7 +343,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Updated Name", "desc", 1L);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenNotMember(actingUser, organization);
 
         authenticateAsActor();
@@ -390,7 +363,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Name", "desc", 1L);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization));
         givenRole(actingUser, organization, OrganizationRole.ADMIN);
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -411,7 +383,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Name", "desc", 1L);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization));
         givenRole(actingUser, organization, OrganizationRole.MEMBER);
 
@@ -431,7 +402,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Name", "desc", 1L);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization));
         givenNotMember(actingUser, organization);
 
@@ -451,7 +421,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Name", "desc", null);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenRole(actingUser, organization, OrganizationRole.ADMIN);
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -471,7 +440,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Name", "desc", null);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenRole(actingUser, organization, OrganizationRole.MEMBER);
 
         authenticateAsActor();
@@ -493,7 +461,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Name", "desc", 2L);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenRole(actingUser, organization, OrganizationRole.ADMIN);
         when(organizationRepository.findById(2L)).thenReturn(Optional.of(otherOrg));
         givenRole(actingUser, otherOrg, OrganizationRole.OWNER);
@@ -517,7 +484,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Name", "desc", 2L);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenRole(actingUser, organization, OrganizationRole.ADMIN);
         when(organizationRepository.findById(2L)).thenReturn(Optional.of(otherOrg));
         givenRole(actingUser, otherOrg, OrganizationRole.MEMBER);
@@ -538,7 +504,6 @@ class ProjectServiceTest {
         ProjectRequest request = new ProjectRequest("Name", "desc", 99L);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         when(organizationRepository.findById(99L)).thenReturn(Optional.empty());
 
         authenticateAsActor();
@@ -569,7 +534,6 @@ class ProjectServiceTest {
         existingProject.setOwner(actingUser);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         when(taskRepository.existsByProjectId(5L)).thenReturn(false);
 
         authenticateAsActor();
@@ -588,7 +552,6 @@ class ProjectServiceTest {
         existingProject.setOwner(realOwner);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
 
         authenticateAsActor();
 
@@ -604,7 +567,6 @@ class ProjectServiceTest {
         existingProject.setOrganization(organization);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenRole(actingUser, organization, OrganizationRole.ADMIN);
         when(taskRepository.existsByProjectId(5L)).thenReturn(false);
 
@@ -621,7 +583,6 @@ class ProjectServiceTest {
         existingProject.setOrganization(organization);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(existingProject));
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         givenRole(actingUser, organization, OrganizationRole.MEMBER);
 
         authenticateAsActor();

@@ -18,6 +18,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.pablo.jobflow.auth.JobflowUserDetails;
 import com.pablo.jobflow.project.Project;
 import com.pablo.jobflow.project.ProjectNotFoundException;
 import com.pablo.jobflow.project.ProjectRepository;
@@ -54,8 +55,9 @@ class TaskServiceIntegrationTest {
 
         actingUser = userRepository.saveAndFlush(user);
 
-        Authentication authentication =
-                new UsernamePasswordAuthenticationToken(actingUser.getEmail(), null);
+        JobflowUserDetails principal = new JobflowUserDetails(actingUser);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 

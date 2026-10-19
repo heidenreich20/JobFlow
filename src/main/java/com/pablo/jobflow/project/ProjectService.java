@@ -1,12 +1,11 @@
 package com.pablo.jobflow.project;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Objects;
 
+import com.pablo.jobflow.auth.CurrentUserProvider;
 import com.pablo.jobflow.organization.InsufficientOrganizationPermissionException;
 import com.pablo.jobflow.organization.Organization;
 import com.pablo.jobflow.organization.OrganizationMembership;
@@ -16,7 +15,6 @@ import com.pablo.jobflow.organization.OrganizationRepository;
 import com.pablo.jobflow.organization.OrganizationRole;
 import com.pablo.jobflow.task.TaskRepository;
 import com.pablo.jobflow.user.User;
-import com.pablo.jobflow.user.UserRepository;
 
 @Service
 public class ProjectService {
@@ -25,24 +23,24 @@ public class ProjectService {
     private final TaskRepository taskRepository;
     private final OrganizationRepository organizationRepository;
     private final OrganizationMembershipRepository membershipRepository;
-    private final UserRepository userRepository;
+    private final CurrentUserProvider currentUserProvider;
 
     public ProjectService(
             ProjectRepository projectRepository,
             TaskRepository taskRepository,
             OrganizationRepository organizationRepository,
             OrganizationMembershipRepository membershipRepository,
-            UserRepository userRepository) {
+            CurrentUserProvider currentUserProvider) {
 
         this.projectRepository = projectRepository;
         this.taskRepository = taskRepository;
         this.organizationRepository = organizationRepository;
         this.membershipRepository = membershipRepository;
-        this.userRepository = userRepository;
+        this.currentUserProvider = currentUserProvider;
     }
 
     public Project createProject(ProjectRequest request) {
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
 
         Project project = new Project();
         project.setName(request.name());
@@ -66,14 +64,14 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new ProjectNotFoundException(id));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
         requireCanView(actingUser, project, id);
 
         return project;
     }
 
     public List<Project> getProjects() {
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
 
         return projectRepository.findAll().stream()
                 .filter(project -> canView(actingUser, project))
@@ -84,7 +82,7 @@ public class ProjectService {
         Project existingProject = projectRepository.findById(id)
                 .orElseThrow(() -> new ProjectNotFoundException(id));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
 
         requireCanEditFields(actingUser, existingProject, id);
 
@@ -122,7 +120,7 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new ProjectNotFoundException(id));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
         requireCanManage(actingUser, project, id);
 
         boolean hasTasks = taskRepository.existsByProjectId(id);
@@ -229,16 +227,5 @@ public class ProjectService {
             throw new InsufficientOrganizationPermissionException(
                     "VIEWER cannot create projects.");
         }
-    }
-
-    private User getAuthenticatedUser() {
-        Authentication authentication =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        String email = authentication.getName();
-
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Authenticated user does not exist"));
     }
 }

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,7 +15,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,17 +29,14 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 
+import com.pablo.jobflow.auth.CurrentUserProvider;
 import com.pablo.jobflow.organization.InsufficientOrganizationPermissionException;
 import com.pablo.jobflow.project.Project;
 import com.pablo.jobflow.project.ProjectNotFoundException;
 import com.pablo.jobflow.project.ProjectRepository;
 import com.pablo.jobflow.project.ProjectService;
 import com.pablo.jobflow.user.User;
-import com.pablo.jobflow.user.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 class TaskServiceTest {
@@ -59,7 +56,7 @@ class TaskServiceTest {
     private ProjectService projectService;
 
     @Mock
-    private UserRepository userRepository;
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private TaskService taskService;
@@ -79,19 +76,11 @@ class TaskServiceTest {
         actingUser.setEmail("actor@acme.com");
     }
 
-    @AfterEach
-    void clearSecurityContext() {
-        SecurityContextHolder.clearContext();
-    }
-
     private void authenticateAsActor() {
-        Authentication authentication =
-                new UsernamePasswordAuthenticationToken("actor@acme.com", null);
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        lenient().when(currentUserProvider.requireCurrentUser()).thenReturn(actingUser);
     }
 
     private void givenAuthenticatedUser() {
-        when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
         authenticateAsActor();
     }
 

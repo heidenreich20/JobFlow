@@ -2,6 +2,7 @@ package com.pablo.jobflow.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pablo.jobflow.organization.DuplicateOrganizationNameException;
+import com.pablo.jobflow.organization.InsufficientOrganizationPermissionException;
 import com.pablo.jobflow.organization.OrganizationNotFoundException;
 import com.pablo.jobflow.organization.OrganizationRequest;
 import com.pablo.jobflow.organization.OrganizationResponse;
@@ -237,6 +238,22 @@ class OrganizationControllerTest {
                 .updateOrganization(eq(1L), any(OrganizationRequest.class));
     }
 
+    @Test
+    void updateOrganization_InsufficientPermission_Returns403() throws Exception {
+        OrganizationRequest request = new OrganizationRequest("New Name");
+
+        when(organizationService.updateOrganization(
+                eq(1L),
+                any(OrganizationRequest.class)
+        )).thenThrow(new InsufficientOrganizationPermissionException(
+                "Only an OWNER or ADMIN can update this organization."));
+
+        mockMvc.perform(put("/api/organizations/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
     // --- DELETE Tests ---
 
     @Test
@@ -255,5 +272,16 @@ class OrganizationControllerTest {
 
         mockMvc.perform(delete("/api/organizations/99"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deleteOrganization_InsufficientPermission_Returns403() throws Exception {
+        doThrow(new InsufficientOrganizationPermissionException(
+                "Only an OWNER can delete this organization."))
+                .when(organizationService)
+                .deleteOrganization(1L);
+
+        mockMvc.perform(delete("/api/organizations/1"))
+                .andExpect(status().isForbidden());
     }
 }

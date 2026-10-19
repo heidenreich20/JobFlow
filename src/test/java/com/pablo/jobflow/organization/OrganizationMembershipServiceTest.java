@@ -1,10 +1,10 @@
 package com.pablo.jobflow.organization;
 
+import com.pablo.jobflow.auth.CurrentUserProvider;
 import com.pablo.jobflow.user.User;
 import com.pablo.jobflow.user.UserNotFoundException;
 import com.pablo.jobflow.user.UserRepository;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,10 +12,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Optional;
 
@@ -34,6 +30,9 @@ class OrganizationMembershipServiceTest {
 
         @Mock
         private UserRepository userRepository;
+
+        @Mock
+        private CurrentUserProvider currentUserProvider;
 
         @InjectMocks
         private OrganizationMembershipService membershipService;
@@ -54,20 +53,11 @@ class OrganizationMembershipServiceTest {
                 targetUser.setEmail("new@acme.com");
         }
 
-        @AfterEach
-        void clearSecurityContext() {
-                SecurityContextHolder.clearContext();
-        }
-
         private void authenticateAsActor() {
-                Authentication authentication = new UsernamePasswordAuthenticationToken("actor@acme.com", null);
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                lenient().when(currentUserProvider.requireCurrentUser()).thenReturn(actingUser);
         }
 
         private void givenActingRole(OrganizationRole role) {
-                when(userRepository.findByEmail("actor@acme.com"))
-                                .thenReturn(Optional.of(actingUser));
-
                 when(membershipRepository.findByUserAndOrganization(actingUser, organization))
                                 .thenReturn(Optional.of(new OrganizationMembership(actingUser, organization, role)));
         }
@@ -184,7 +174,6 @@ class OrganizationMembershipServiceTest {
                 AddMemberRequest request = new AddMemberRequest("new@acme.com", OrganizationRole.MEMBER);
 
                 when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization));
-                when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
                 when(membershipRepository.findByUserAndOrganization(actingUser, organization))
                                 .thenReturn(Optional.empty());
 
@@ -376,7 +365,6 @@ class OrganizationMembershipServiceTest {
         @Test
         void changeRole_ActorNotAMember_ThrowsException() {
                 when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization));
-                when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
                 when(membershipRepository.findByUserAndOrganization(actingUser, organization))
                                 .thenReturn(Optional.empty());
 
@@ -516,7 +504,6 @@ class OrganizationMembershipServiceTest {
         @Test
         void removeMember_ActorNotAMember_ThrowsException() {
                 when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization));
-                when(userRepository.findByEmail("actor@acme.com")).thenReturn(Optional.of(actingUser));
                 when(membershipRepository.findByUserAndOrganization(actingUser, organization))
                                 .thenReturn(Optional.empty());
 

@@ -1,11 +1,10 @@
 package com.pablo.jobflow.organization;
 
+import com.pablo.jobflow.auth.CurrentUserProvider;
 import com.pablo.jobflow.user.User;
 import com.pablo.jobflow.user.UserNotFoundException;
 import com.pablo.jobflow.user.UserRepository;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,15 +14,18 @@ public class OrganizationMembershipService {
     private final OrganizationRepository organizationRepository;
     private final OrganizationMembershipRepository membershipRepository;
     private final UserRepository userRepository;
+    private final CurrentUserProvider currentUserProvider;
 
     public OrganizationMembershipService(
             OrganizationRepository organizationRepository,
             OrganizationMembershipRepository membershipRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            CurrentUserProvider currentUserProvider) {
 
         this.organizationRepository = organizationRepository;
         this.membershipRepository = membershipRepository;
         this.userRepository = userRepository;
+        this.currentUserProvider = currentUserProvider;
     }
 
     @Transactional
@@ -34,7 +36,7 @@ public class OrganizationMembershipService {
         Organization organization = organizationRepository.findById(organizationId)
                 .orElseThrow(() -> new OrganizationNotFoundException(organizationId));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
 
         OrganizationRole actingRole = membershipRepository
                 .findByUserAndOrganization(actingUser, organization)
@@ -76,7 +78,7 @@ public class OrganizationMembershipService {
         Organization organization = organizationRepository.findById(organizationId)
                 .orElseThrow(() -> new OrganizationNotFoundException(organizationId));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
 
         OrganizationRole actingRole = membershipRepository
                 .findByUserAndOrganization(actingUser, organization)
@@ -130,7 +132,7 @@ public class OrganizationMembershipService {
         Organization organization = organizationRepository.findById(organizationId)
                 .orElseThrow(() -> new OrganizationNotFoundException(organizationId));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
 
         OrganizationRole actingRole = membershipRepository
                 .findByUserAndOrganization(actingUser, organization)
@@ -167,17 +169,6 @@ public class OrganizationMembershipService {
         }
 
         membershipRepository.delete(targetMembership);
-    }
-
-    private User getAuthenticatedUser() {
-        Authentication authentication =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        String email = authentication.getName();
-
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Authenticated user does not exist"));
     }
 
     private OrganizationMembershipResponse mapToResponse(OrganizationMembership membership) {

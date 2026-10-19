@@ -3,17 +3,15 @@ package com.pablo.jobflow.task;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import com.pablo.jobflow.auth.CurrentUserProvider;
 import com.pablo.jobflow.organization.InsufficientOrganizationPermissionException;
 import com.pablo.jobflow.project.Project;
 import com.pablo.jobflow.project.ProjectNotFoundException;
 import com.pablo.jobflow.project.ProjectRepository;
 import com.pablo.jobflow.project.ProjectService;
 import com.pablo.jobflow.user.User;
-import com.pablo.jobflow.user.UserRepository;
 
 @Service
 public class TaskService {
@@ -21,18 +19,18 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final ProjectRepository projectRepository;
     private final ProjectService projectService;
-    private final UserRepository userRepository;
+    private final CurrentUserProvider currentUserProvider;
 
     public TaskService(
             TaskRepository taskRepository,
             ProjectRepository projectRepository,
             ProjectService projectService,
-            UserRepository userRepository) {
+            CurrentUserProvider currentUserProvider) {
 
         this.taskRepository = taskRepository;
         this.projectRepository = projectRepository;
         this.projectService = projectService;
-        this.userRepository = userRepository;
+        this.currentUserProvider = currentUserProvider;
     }
 
     public TaskResponse createTask(Long projectId, TaskRequest request) {
@@ -40,7 +38,7 @@ public class TaskService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ProjectNotFoundException(projectId));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
         requireCanEditProject(actingUser, project, projectId);
 
         Task task = new Task();
@@ -72,7 +70,7 @@ public class TaskService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ProjectNotFoundException(projectId));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
         requireCanViewProject(actingUser, project, projectId);
 
         Specification<Task> spec = Specification.where(TaskSpecifications.hasProjectId(projectId));
@@ -94,7 +92,7 @@ public class TaskService {
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new TaskNotFoundException(id));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
         Project project = loadProjectForTask(task);
         requireCanViewTask(actingUser, project, id);
 
@@ -106,7 +104,7 @@ public class TaskService {
         Task existingTask = taskRepository.findById(id)
                 .orElseThrow(() -> new TaskNotFoundException(id));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
         Project project = loadProjectForTask(existingTask);
         requireCanEditTask(actingUser, project, id);
 
@@ -131,7 +129,7 @@ public class TaskService {
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new TaskNotFoundException(id));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
         Project project = loadProjectForTask(task);
         requireCanDeleteTask(actingUser, project, id);
 
@@ -145,7 +143,7 @@ public class TaskService {
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new TaskNotFoundException(id));
 
-        User actingUser = getAuthenticatedUser();
+        User actingUser = currentUserProvider.requireCurrentUser();
         Project project = loadProjectForTask(task);
         requireCanEditTask(actingUser, project, id);
 
@@ -237,16 +235,5 @@ public class TaskService {
             throw new InsufficientOrganizationPermissionException(
                     "Only an OWNER or ADMIN can delete this task.");
         }
-    }
-
-    private User getAuthenticatedUser() {
-        Authentication authentication =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        String email = authentication.getName();
-
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Authenticated user does not exist"));
     }
 }
